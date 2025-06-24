@@ -32,8 +32,7 @@ class Server:
                 break
             request_data += chunk
 
-        response = self.handle_request(request_data)
-        client_socket.sendall(response.encode('utf-8'))
+        self.handle_request(request_data)
 
     def parse_request(self, request_data: bytes):
         request_str = request_data.decode('utf-8')
@@ -68,7 +67,7 @@ class Server:
         else:
             response_body = "Unknown operation"
 
-        return response_body
+        self.send_response(response_body)
 
     def send_response(self, body: str) -> str:
         response = "HTTP/1.1 200 OK\r\n"
