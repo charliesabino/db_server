@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional, Tuple
 import socket
 
 class Database:
@@ -25,6 +25,7 @@ class Server:
 
     def handle_client(self, client_socket: socket.socket):
         try:
+            # Read the full request
             request_data = b""
 
             # this is inefficient but KISS
@@ -35,70 +36,99 @@ class Server:
                 request_data += chunk
 
             if request_data:
-                response_body = self.handle_request(request_data)
-                self.send_response(client_socket, response_body)
+                status_code, response_body = self.handle_request(request_data)
+                self.send_response(client_socket, status_code, response_body)
+            else:
+                self.send_response(client_socket, 400, "Bad Request: Empty request")
         except Exception as e:
             print(f"Error handling client: {e}")
-            self.send_response(client_socket, f"Error: {str(e)}")
+            self.send_response(client_socket, 500, f"Internal Server Error: {str(e)}")
 
-    def parse_request(self, request_data: bytes):
+    def parse_request(self, request_data: bytes) -> Tuple[str, str, str, str]:
         request_str = request_data.decode('utf-8')
         lines = request_str.split('\r\n')
+        
+        if not lines:
+            raise ValueError("Empty request")
+            
         # first line is the request line
         request_line = lines[0]
 
-        # looks like "GET /set?key=value HTTP/1.1" or "GET /get?key=somekey HTTP/1.1"
-        _, full_path, _ = request_line.split(' ')
-        print(f"path: {full_path}")
+        # looks like "GET /set?key=value HTTP/1.1"
+        parts = request_line.split(' ')
+        if len(parts) != 3:
+            raise ValueError("Malformed request line")
+            
+        method, full_path, _ = parts
+        print(f"method: {method}, path: {full_path}")
 
         # Handle missing query string
         if '?' not in full_path:
-            return full_path, "", ""
-
+            return method, full_path, "", ""
+        
         path, query_string = full_path.split('?', 1)
-
+        
         # Handle missing = in query string
         if '=' not in query_string:
-            return path, query_string, ""
+            return method, path, query_string, ""
+        
+        param1, param2 = query_string.split("=", 1)  # maxsplit=1 for values with =
 
-        param1, param2 = query_string.split("=", 1)  # Added maxsplit=1 for values with =
+        return method, path, param1, param2
 
-        return path, param1, param2
+    def handle_request(self, request_data: bytes) -> Tuple[int, str]:
+        try:
+            # Parse the request
+            method, operation, param1, param2 = self.parse_request(request_data)
 
-    def handle_request(self, request_data: bytes) -> str:
-        # Parse the request
-        operation, param1, param2 = self.parse_request(request_data)
+            # Check HTTP method
+            if method != 'GET':
+                return 405, f"Method Not Allowed: {method}. Only GET is supported"
 
-        # could use dispatch table here, but this is fine for now
-        if operation == '/set':
-            if not param1 or not param2:
-                response_body = "Error: /set requires key=value format"
-            else:
-                self.db.set(param1, param2)
-                response_body = f"Successfully set {param1} to {param2}"
-        elif operation == '/get':
-            if not param2:
-                response_body = "Error: /get requires key=somekey format"
-            else:
-                value = self.db.get(param2)
-                if value is None:
-                    response_body = f"Database does not contain key {param2}"
+            # Route based on path
+            if operation == '/set':
+                if not param1 or not param2:
+                    return 400, "Bad Request: /set requires key=value format"
                 else:
-                    response_body = value
-        else:
-            response_body = "Unknown operation"
+                    self.db.set(param1, param2)
+                    return 200, f"Successfully set {param1} to {param2}"
+            elif operation == '/get':
+                if not param2:
+                    return 400, "Bad Request: /get requires key=somekey format"
+                else:
+                    value = self.db.get(param2)
+                    if value is None:
+                        return 404, f"Not Found: Database does not contain key {param2}"
+                    else:
+                        return 200, value
+            else:
+                return 404, f"Not Found: Unknown path {operation}"
 
-        return response_body
+        except ValueError as e:
+            return 400, f"Bad Request: {str(e)}"
+        except Exception as e:
+            return 500, f"Internal Server Error: {str(e)}"
 
-    def send_response(self, client_socket: socket.socket, body: str) -> str:
-        response = "HTTP/1.1 200 OK\r\n"
+    def send_response(self, client_socket: socket.socket, status_code: int, body: str) -> None:
+        status_text = {
+            200: "OK",
+            400: "Bad Request",
+            404: "Not Found",
+            405: "Method Not Allowed",
+            500: "Internal Server Error"
+        }.get(status_code, "Unknown")
+
+        response = f"HTTP/1.1 {status_code} {status_text}\r\n"
         response += "Content-Type: text/plain\r\n"
         response += f"Content-Length: {len(body)}\r\n"
         response += "Connection: close\r\n"
         response += "\r\n"
         response += body
 
-        client_socket.sendall(response.encode('utf-8'))
+        try:
+            client_socket.sendall(response.encode('utf-8'))
+        except Exception as e:
+            print(f"Error sending response: {e}")
 
     def close(self):
         self.server.close()
@@ -106,11 +136,16 @@ class Server:
 def main():
     server = Server()
 
-    # could employ threads / asyncio / etc. here to handle multiple clients; omitted for simplicity
-    while True:
-        client_socket, client_address = server.accept()
-        server.handle_client(client_socket)
-        client_socket.close()
+    try:
+        # could employ threads / asyncio / etc. here to handle multiple clients; omitted for simplicity
+        while True:
+            client_socket, client_address = server.accept()
+            print(f"Connection from {client_address}")
+            server.handle_client(client_socket)
+            client_socket.close()
+    except KeyboardInterrupt:
+        print("\nShutting down...")
+        server.close()
 
 if __name__ == "__main__":
     main()
