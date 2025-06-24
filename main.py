@@ -24,6 +24,8 @@ class Server:
     def handle_client(self, client_socket: socket.socket):
         # Read the full request
         request_data = b""
+        
+        # this is inefficient but KISS
         while b"\r\n\r\n" not in request_data:
             chunk = client_socket.recv(1024)
             if not chunk:
@@ -38,7 +40,7 @@ class Server:
         lines = request_str.split('\r\n')
         # first line is the request line
         request_line = lines[0]
-        # looks like "GET /set?key=value HTTP/1.1"
+        # looks like "GET /set?key=value HTTP/1.1" or "GET /set?key=somekey HTTP/1.1"
         _, full_path, _ = request_line.split(' ')
 
         operation, query_string = full_path.split('?')
