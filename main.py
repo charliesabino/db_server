@@ -70,6 +70,16 @@ class Server:
 
         return response_body
 
+    def send_response(self, body: str) -> str:
+        response = "HTTP/1.1 200 OK\r\n"
+        response += "Content-Type: text/plain\r\n"
+        response += f"Content-Length: {len(body)}\r\n"
+        response += "Connection: close\r\n"
+        response += "\r\n"
+        response += body
+
+        return response
+
     def close(self):
         self.server.close()
 
