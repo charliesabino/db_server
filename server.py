@@ -1,5 +1,6 @@
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 import socket
+
 
 class Database:
     def __init__(self):
@@ -11,11 +12,14 @@ class Database:
     def set(self, key: str, value: str) -> None:
         self.kv_store[key] = value
 
+
 class Server:
-    def __init__(self, port: int=4000):
+    def __init__(self, port: int = 4000):
         self.db = Database()
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # socket reuse
+        self.server.setsockopt(
+            socket.SOL_SOCKET, socket.SO_REUSEADDR, 1
+        )  # socket reuse
         self.server.bind(("127.0.0.1", port))
         self.server.listen()
         print("Server listening on http://127.0.0.1:4000")
@@ -44,31 +48,31 @@ class Server:
             self.send_response(client_socket, 500, f"Internal Server Error: {str(e)}")
 
     def parse_request(self, request_data: bytes) -> Tuple[str, str, str, str]:
-        request_str = request_data.decode('utf-8')
-        lines = request_str.split('\r\n')
-        
+        request_str = request_data.decode("utf-8")
+        lines = request_str.split("\r\n")
+
         if not lines:
             raise ValueError("Empty request")
-            
+
         # first line is the request line
         request_line = lines[0]
 
         # looks like "GET /set?key=value HTTP/1.1"
-        parts = request_line.split(' ')
+        parts = request_line.split(" ")
         if len(parts) != 3:
             raise ValueError("Malformed request line")
-            
+
         method, full_path, _ = parts
         print(f"method: {method}, path: {full_path}")
 
-        if '?' not in full_path:
+        if "?" not in full_path:
             return method, full_path, "", ""
-        
-        path, query_string = full_path.split('?', 1)
-        
-        if '=' not in query_string:
+
+        path, query_string = full_path.split("?", 1)
+
+        if "=" not in query_string:
             return method, path, query_string, ""
-        
+
         param1, param2 = query_string.split("=", 1)  # maxsplit=1 for values with =
 
         return method, path, param1, param2
@@ -77,16 +81,16 @@ class Server:
         try:
             method, operation, param1, param2 = self.parse_request(request_data)
 
-            if method != 'GET':
+            if method != "GET":
                 return 405, f"Method Not Allowed: {method}. Only GET is supported"
 
-            if operation == '/set':
+            if operation == "/set":
                 if not param1 or not param2:
                     return 400, "Bad Request: /set requires key=value format"
                 else:
                     self.db.set(param1, param2)
                     return 200, f"Successfully set {param1} to {param2}"
-            elif operation == '/get':
+            elif operation == "/get":
                 if not param2:
                     return 400, "Bad Request: /get requires key=somekey format"
                 else:
@@ -103,13 +107,15 @@ class Server:
         except Exception as e:
             return 500, f"Internal Server Error: {str(e)}"
 
-    def send_response(self, client_socket: socket.socket, status_code: int, body: str) -> None:
+    def send_response(
+        self, client_socket: socket.socket, status_code: int, body: str
+    ) -> None:
         status_text = {
             200: "OK",
             400: "Bad Request",
             404: "Not Found",
             405: "Method Not Allowed",
-            500: "Internal Server Error"
+            500: "Internal Server Error",
         }.get(status_code, "Unknown")
 
         response = f"HTTP/1.1 {status_code} {status_text}\r\n"
@@ -120,12 +126,13 @@ class Server:
         response += body
 
         try:
-            client_socket.sendall(response.encode('utf-8'))
+            client_socket.sendall(response.encode("utf-8"))
         except Exception as e:
             print(f"Error sending response: {e}")
 
     def close(self):
         self.server.close()
+
 
 def main():
     server = Server()
@@ -140,6 +147,7 @@ def main():
     except KeyboardInterrupt:
         print("\nShutting down...")
         server.close()
+
 
 if __name__ == "__main__":
     main()
