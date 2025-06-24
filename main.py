@@ -17,21 +17,24 @@ class Server:
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind(("127.0.0.1", 4000))
         self.server.listen()
-        self.buffer = b""
     
     def accept(self):
         return self.server.accept()
     
     def handle_client(self, client_socket: socket.socket):
-        while True:
-            self.handle_request(client_socket)
-    
-    def handle_request(self, client_socket: socket.socket):
-        self.buffer += client_socket.recv(1024)
-        if not self.buffer:
-            return
-        print(self.buffer)
-        self.buffer = b""
+        # Read the full request
+        request_data = b""
+        while b"\r\n\r\n" not in request_data:
+            chunk = client_socket.recv(1024)
+            if not chunk:
+                break
+            request_data += chunk
+
+        self.handle_request(request_data)
+        
+    def handle_request(self, request_data: bytes):
+        
+        
 
     def close(self):
         self.server.close()
