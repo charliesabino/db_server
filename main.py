@@ -54,17 +54,16 @@ class Server:
         # Handle missing query string
         if '?' not in full_path:
             return full_path, "", ""
-        
+
         path, query_string = full_path.split('?', 1)
-        
+
         # Handle missing = in query string
         if '=' not in query_string:
             return path, query_string, ""
-        
+
         param1, param2 = query_string.split("=", 1)  # Added maxsplit=1 for values with =
 
         return path, param1, param2
-
 
     def handle_request(self, request_data: bytes) -> str:
         # Parse the request
@@ -72,14 +71,20 @@ class Server:
 
         # could use dispatch table here, but this is fine for now
         if operation == '/set':
-            self.db.set(param1, param2)
-            response_body = f"Successfully set {param1} to {param2}"
-        elif operation == '/get':
-            value = self.db.get(param2)
-            if value is None:
-                response_body = f"Database does not contain key {param2}"
+            if not param1 or not param2:
+                response_body = "Error: /set requires key=value format"
             else:
-                response_body = value
+                self.db.set(param1, param2)
+                response_body = f"Successfully set {param1} to {param2}"
+        elif operation == '/get':
+            if not param2:
+                response_body = "Error: /get requires key=somekey format"
+            else:
+                value = self.db.get(param2)
+                if value is None:
+                    response_body = f"Database does not contain key {param2}"
+                else:
+                    response_body = value
         else:
             response_body = "Unknown operation"
 
