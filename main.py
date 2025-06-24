@@ -15,6 +15,7 @@ class Server:
     def __init__(self):
         self.db = Database()
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # socket reuse
         self.server.bind(("127.0.0.1", 4000))
         self.server.listen()
 
@@ -32,7 +33,8 @@ class Server:
                 break
             request_data += chunk
 
-        self.handle_request(request_data)
+        response_body = self.handle_request(request_data)
+        self.send_response(client_socket, response_body)
 
     def parse_request(self, request_data: bytes):
         request_str = request_data.decode('utf-8')
@@ -42,7 +44,7 @@ class Server:
 
         # looks like "GET /set?key=value HTTP/1.1" or "GET /set?key=somekey HTTP/1.1"
         _, full_path, _ = request_line.split(' ')
-        print("path: {full_path}")
+        print(f"path: {full_path}")
 
         path, query_string = full_path.split('?', 1)
         param1, param2 = query_string.split("=")
@@ -57,7 +59,7 @@ class Server:
         # could use dispatch table here, but this is fine for now
         if operation == '/set':
             self.db.set(param1, param2)
-            response_body = "Successfully set {key} to {value}"
+            response_body = f"Successfully set {param1} to {param2}"
         elif operation == '/get':
             value = self.db.get(param2)
             if value is None:
@@ -67,9 +69,9 @@ class Server:
         else:
             response_body = "Unknown operation"
 
-        self.send_response(response_body)
+        return response_body
 
-    def send_response(self, body: str) -> str:
+    def send_response(self, client_socket: socket.socket, body: str) -> str:
         response = "HTTP/1.1 200 OK\r\n"
         response += "Content-Type: text/plain\r\n"
         response += f"Content-Length: {len(body)}\r\n"
@@ -77,7 +79,7 @@ class Server:
         response += "\r\n"
         response += body
 
-        return response
+        client_socket.sendall(response.encode('utf-8'))
 
     def close(self):
         self.server.close()
