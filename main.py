@@ -40,25 +40,30 @@ class Server:
         lines = request_str.split('\r\n')
         # first line is the request line
         request_line = lines[0]
+
         # looks like "GET /set?key=value HTTP/1.1" or "GET /set?key=somekey HTTP/1.1"
         _, full_path, _ = request_line.split(' ')
+        print("path: {full_path}")
 
-        operation, query_string = full_path.split('?')
-        key, value = query_string.split('=')
+        path, query_string = full_path.split('?', 1)
+        param1, param2 = query_string.split("=")
 
-        return operation, key, value
+        return path, param1, param2
 
 
     def handle_request(self, request_data: bytes) -> str:
         # Parse the request
-        operation, key, value = self.parse_request(request_data)
+        operation, param1, param2 = self.parse_request(request_data)
 
         # could use dispatch table here, but this is fine for now
-        if operation == 'set':
-            self.db.set(key, value)
-        elif operation == 'get':
-            response = self.db.get(key)
+        if operation == '/set':
+            self.db.set(param1, param2)
+            response_body = "Successfully set {key} to {value}"
+        elif operation == '/get':
+            response_body = self.db.get(param2)
 
+        return response_body
+    
         return response
 
     def close(self):
