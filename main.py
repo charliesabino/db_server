@@ -5,10 +5,10 @@ class Database:
     def __init__(self):
         self.kv_store = {}
     
-    def get(self, key: str) -> Any:
+    def get(self, key: str) -> str:
         return self.kv_store.get(key)
     
-    def set(self, key: str, value: Any) -> None:
+    def set(self, key: str, value: str) -> None:
         self.kv_store[key] = value
 
 class Server:
@@ -30,7 +30,8 @@ class Server:
                 break
             request_data += chunk
 
-        self.handle_request(request_data)
+        response = self.handle_request(request_data)
+        client_socket.sendall(response.encode('utf-8'))
         
     def parse_request(self, request_data: bytes):
         request_str = request_data.decode('utf-8')
@@ -40,20 +41,23 @@ class Server:
         # looks like "GET /set?key=value HTTP/1.1"
         _, full_path, _ = request_line.split(' ')
 
-        method, query_string = full_path.split('?')
+        operation, query_string = full_path.split('?')
         key, value = query_string.split('=')
 
-        return method, key, value
+        return operation, key, value
 
 
-    def handle_request(self, request_data: bytes):
+    def handle_request(self, request_data: bytes) -> str:
         # Parse the request
-        method, key, value = self.parse_request(request_data)
-        if method == 'set':
+        operation, key, value = self.parse_request(request_data)
+
+        # could use dispatch table here, but this is fine for now
+        if operation == 'set':
             self.db.set(key, value)
-        elif method == 'get':
-            self.db.get(key)
-        
+        elif operation == 'get':
+            response = self.db.get(key)
+
+        return response
 
     def close(self):
         self.server.close()
