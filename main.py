@@ -18,6 +18,7 @@ class Server:
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # socket reuse
         self.server.bind(("127.0.0.1", 4000))
         self.server.listen()
+        print("Server listening on http://127.0.0.1:4000")
 
     def accept(self):
         return self.server.accept()
