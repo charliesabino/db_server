@@ -4,10 +4,10 @@ import socket
 class Database:
     def __init__(self):
         self.kv_store = {}
-    
+
     def get(self, key: str) -> str:
         return self.kv_store.get(key)
-    
+
     def set(self, key: str, value: str) -> None:
         self.kv_store[key] = value
 
@@ -17,14 +17,14 @@ class Server:
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.bind(("127.0.0.1", 4000))
         self.server.listen()
-    
+
     def accept(self):
         return self.server.accept()
-    
+
     def handle_client(self, client_socket: socket.socket):
         # Read the full request
         request_data = b""
-        
+
         # this is inefficient but KISS
         while b"\r\n\r\n" not in request_data:
             chunk = client_socket.recv(1024)
@@ -34,7 +34,7 @@ class Server:
 
         response = self.handle_request(request_data)
         client_socket.sendall(response.encode('utf-8'))
-        
+
     def parse_request(self, request_data: bytes):
         request_str = request_data.decode('utf-8')
         lines = request_str.split('\r\n')
@@ -60,11 +60,15 @@ class Server:
             self.db.set(param1, param2)
             response_body = "Successfully set {key} to {value}"
         elif operation == '/get':
-            response_body = self.db.get(param2)
+            value = self.db.get(param2)
+            if value is None:
+                response_body = f"Database does not contain key {param2}"
+            else:
+                response_body = value
+        else:
+            response_body = "Unknown operation"
 
         return response_body
-    
-        return response
 
     def close(self):
         self.server.close()
