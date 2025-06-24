@@ -24,18 +24,22 @@ class Server:
         return self.server.accept()
 
     def handle_client(self, client_socket: socket.socket):
-        # Read the full request
-        request_data = b""
+        try:
+            request_data = b""
 
-        # this is inefficient but KISS
-        while b"\r\n\r\n" not in request_data:
-            chunk = client_socket.recv(1024)
-            if not chunk:
-                break
-            request_data += chunk
+            # this is inefficient but KISS
+            while b"\r\n\r\n" not in request_data:
+                chunk = client_socket.recv(1024)
+                if not chunk:
+                    break
+                request_data += chunk
 
-        response_body = self.handle_request(request_data)
-        self.send_response(client_socket, response_body)
+            if request_data:
+                response_body = self.handle_request(request_data)
+                self.send_response(client_socket, response_body)
+        except Exception as e:
+            print(f"Error handling client: {e}")
+            self.send_response(client_socket, f"Error: {str(e)}")
 
     def parse_request(self, request_data: bytes):
         request_str = request_data.decode('utf-8')
@@ -43,12 +47,21 @@ class Server:
         # first line is the request line
         request_line = lines[0]
 
-        # looks like "GET /set?key=value HTTP/1.1" or "GET /set?key=somekey HTTP/1.1"
+        # looks like "GET /set?key=value HTTP/1.1" or "GET /get?key=somekey HTTP/1.1"
         _, full_path, _ = request_line.split(' ')
         print(f"path: {full_path}")
 
+        # Handle missing query string
+        if '?' not in full_path:
+            return full_path, "", ""
+        
         path, query_string = full_path.split('?', 1)
-        param1, param2 = query_string.split("=")
+        
+        # Handle missing = in query string
+        if '=' not in query_string:
+            return path, query_string, ""
+        
+        param1, param2 = query_string.split("=", 1)  # Added maxsplit=1 for values with =
 
         return path, param1, param2
 
