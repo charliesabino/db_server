@@ -5,17 +5,10 @@ import time
 import requests
 from typing import Optional
 
-# Import your server code
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-
 from server import Server, Database
 
 
 class TestDatabase:
-    """Test the Database class in isolation"""
-    
     def test_set_and_get(self):
         db = Database()
         db.set("key1", "value1")
@@ -43,24 +36,13 @@ class TestDatabase:
 
 
 class ServerTestHelper:
-    """Helper class to manage server lifecycle for tests"""
-    
-    def __init__(self, port: int = 4001):  # Use different port to avoid conflicts
+    def __init__(self, port: int = 4001):
         self.port = port
-        self.server: Optional[Server] = None
-        self.thread: Optional[threading.Thread] = None
+        self.server = Server(port)
+        self.thread = None
         self.base_url = f"http://127.0.0.1:{port}"
     
     def start(self):
-        """Start the server in a separate thread"""
-        # Modify Server to accept port parameter
-        self.server = Server()
-        self.server.server.close()  # Close the default socket
-        self.server.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server.server.bind(("127.0.0.1", self.port))
-        self.server.server.listen()
-        
         def run_server():
             while True:
                 try:
@@ -68,16 +50,14 @@ class ServerTestHelper:
                     self.server.handle_client(client_socket)
                     client_socket.close()
                 except OSError:
-                    break  # Server was closed
+                    break
         
         self.thread = threading.Thread(target=run_server, daemon=True)
         self.thread.start()
         
-        # Wait for server to be ready
         time.sleep(0.1)
         
     def stop(self):
-        """Stop the server"""
         if self.server:
             self.server.close()
         if self.thread:
@@ -86,7 +66,6 @@ class ServerTestHelper:
 
 @pytest.fixture
 def server():
-    """Pytest fixture to provide a running server for tests"""
     helper = ServerTestHelper()
     helper.start()
     yield helper
@@ -94,15 +73,11 @@ def server():
 
 
 class TestServerHTTP:
-    """Test the HTTP server functionality"""
-    
     def test_set_and_get_basic(self, server):
-        # Set a value
         response = requests.get(f"{server.base_url}/set?key1=value1")
         assert response.status_code == 200
         assert "Successfully set key1 to value1" in response.text
         
-        # Get the value back
         response = requests.get(f"{server.base_url}/get?key=key1")
         assert response.status_code == 200
         assert response.text == "value1"
@@ -141,7 +116,6 @@ class TestServerHTTP:
         assert "Only GET is supported" in response.text
     
     def test_multiple_sets_and_gets(self, server):
-        # Set multiple values
         test_data = {
             "name": "John",
             "age": "30",
@@ -152,28 +126,23 @@ class TestServerHTTP:
             response = requests.get(f"{server.base_url}/set?{key}={value}")
             assert response.status_code == 200
         
-        # Get all values back
         for key, expected_value in test_data.items():
             response = requests.get(f"{server.base_url}/get?key={key}")
             assert response.status_code == 200
             assert response.text == expected_value
     
     def test_overwrite_value(self, server):
-        # Set initial value
         response = requests.get(f"{server.base_url}/set?key1=initial")
         assert response.status_code == 200
         
-        # Overwrite with new value
         response = requests.get(f"{server.base_url}/set?key1=updated")
         assert response.status_code == 200
         
-        # Verify new value
         response = requests.get(f"{server.base_url}/get?key=key1")
         assert response.status_code == 200
         assert response.text == "updated"
     
     def test_special_characters_in_values(self, server):
-        # Test URL-encoded values
         test_cases = [
             ("space", "hello world", "hello%20world"),
             ("special", "a&b=c", "a%26b%3Dc"),
@@ -186,41 +155,33 @@ class TestServerHTTP:
             
             response = requests.get(f"{server.base_url}/get?key={key}")
             assert response.status_code == 200
-            # The server doesn't decode URLs, so it stores the encoded version
             assert response.text == encoded
     
     def test_empty_value(self, server):
-        # This should fail with current implementation
         response = requests.get(f"{server.base_url}/set?key=")
         assert response.status_code == 400
     
     def test_concurrent_requests(self, server):
-        """Test that the server can handle multiple requests"""
         import concurrent.futures
         
         def make_request(i):
-            # Set a value
             response = requests.get(f"{server.base_url}/set?key{i}=value{i}")
             assert response.status_code == 200
             
-            # Get it back
             response = requests.get(f"{server.base_url}/get?key=key{i}")
             assert response.status_code == 200
             assert response.text == f"value{i}"
         
-        # Make 10 concurrent requests
         with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
             futures = [executor.submit(make_request, i) for i in range(10)]
             for future in concurrent.futures.as_completed(futures):
-                future.result()  # This will raise any exceptions
+                future.result()
 
 
 class TestServerParsing:
-    """Test request parsing functionality"""
-    
     def test_parse_valid_set_request(self):
         server = Server()
-        server.close()  # We don't need the socket for parsing tests
+        server.close()
         
         request = b"GET /set?key=value HTTP/1.1\r\nHost: localhost\r\n\r\n"
         method, path, param1, param2 = server.parse_request(request)
@@ -252,7 +213,7 @@ class TestServerParsing:
         assert method == "GET"
         assert path == "/set"
         assert param1 == "key"
-        assert param2 == "a=b=c"  # Should preserve equals signs in value
+        assert param2 == "a=b=c"
     
     def test_parse_request_without_query(self):
         server = Server()

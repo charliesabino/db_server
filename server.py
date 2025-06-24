@@ -12,11 +12,11 @@ class Database:
         self.kv_store[key] = value
 
 class Server:
-    def __init__(self):
+    def __init__(self, port: int=4000):
         self.db = Database()
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # socket reuse
-        self.server.bind(("127.0.0.1", 4000))
+        self.server.bind(("127.0.0.1", port))
         self.server.listen()
         print("Server listening on http://127.0.0.1:4000")
 
@@ -25,7 +25,6 @@ class Server:
 
     def handle_client(self, client_socket: socket.socket):
         try:
-            # Read the full request
             request_data = b""
 
             # this is inefficient but KISS
@@ -62,13 +61,11 @@ class Server:
         method, full_path, _ = parts
         print(f"method: {method}, path: {full_path}")
 
-        # Handle missing query string
         if '?' not in full_path:
             return method, full_path, "", ""
         
         path, query_string = full_path.split('?', 1)
         
-        # Handle missing = in query string
         if '=' not in query_string:
             return method, path, query_string, ""
         
@@ -78,14 +75,11 @@ class Server:
 
     def handle_request(self, request_data: bytes) -> Tuple[int, str]:
         try:
-            # Parse the request
             method, operation, param1, param2 = self.parse_request(request_data)
 
-            # Check HTTP method
             if method != 'GET':
                 return 405, f"Method Not Allowed: {method}. Only GET is supported"
 
-            # Route based on path
             if operation == '/set':
                 if not param1 or not param2:
                     return 400, "Bad Request: /set requires key=value format"
