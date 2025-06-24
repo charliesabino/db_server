@@ -32,8 +32,27 @@ class Server:
 
         self.handle_request(request_data)
         
+    def parse_request(self, request_data: bytes):
+        request_str = request_data.decode('utf-8')
+        lines = request_str.split('\r\n')
+        # first line is the request line
+        request_line = lines[0]
+        # looks like "GET /set?key=value HTTP/1.1"
+        _, full_path, _ = request_line.split(' ')
+
+        method, query_string = full_path.split('?')
+        key, value = query_string.split('=')
+
+        return method, key, value
+
+
     def handle_request(self, request_data: bytes):
-        
+        # Parse the request
+        method, key, value = self.parse_request(request_data)
+        if method == 'set':
+            self.db.set(key, value)
+        elif method == 'get':
+            self.db.get(key)
         
 
     def close(self):
